@@ -39,6 +39,9 @@ export const transactions: Transaction[] = [
     baseAmount: 120,
     categoryId: "cat-breakfast",
     payerId: "person-me",
+    payments: [
+      { id: "payment-seed-1", transactionId: "tx-seed-1", personId: "person-me", amount: 120 }
+    ],
     date: new Date().toISOString(),
     note: "咖啡與早餐",
     tags: ["日常"],
@@ -57,6 +60,9 @@ export const transactions: Transaction[] = [
     baseAmount: 1800,
     categoryId: "cat-dining",
     payerId: "person-me",
+    payments: [
+      { id: "payment-seed-2", transactionId: "tx-seed-2", personId: "person-me", amount: 1800 }
+    ],
     date: new Date().toISOString(),
     note: "週末聚餐",
     tags: ["朋友"],
@@ -77,6 +83,9 @@ export const transactions: Transaction[] = [
     baseAmount: 62000,
     categoryId: "cat-salary",
     payerId: "person-me",
+    payments: [
+      { id: "payment-seed-3", transactionId: "tx-seed-3", personId: "person-me", amount: 62000 }
+    ],
     date: new Date().toISOString(),
     note: "本月薪資",
     tags: ["固定"],

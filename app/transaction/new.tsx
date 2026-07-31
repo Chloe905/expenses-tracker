@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
+import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { z } from "zod";
 
@@ -23,8 +24,7 @@ const schema = z.object({
   date: z.string().min(1),
   note: z.string(),
   tags: z.string(),
-  splitMode: z.enum(["equal", "amount", "percent"]),
-  participantIds: z.array(z.string()).min(1)
+  splitMode: z.enum(["equal", "amount", "percent"])
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -35,6 +35,12 @@ export default function NewTransactionScreen() {
   const people = useLedgerStore((state) => state.people);
   const currencies = useLedgerStore((state) => state.currencies);
   const addTransaction = useLedgerStore((state) => state.addTransaction);
+  const [payerIds, setPayerIds] = useState(["person-me"]);
+  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
+  const [splitPersonIds, setSplitPersonIds] = useState(["person-me"]);
+  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
+  const [splitPercents, setSplitPercents] = useState<Record<string, string>>({});
+  const [allocationError, setAllocationError] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -47,13 +53,13 @@ export default function NewTransactionScreen() {
       date: new Date().toISOString(),
       note: "",
       tags: "",
-      splitMode: "equal",
-      participantIds: ["person-me"]
+      splitMode: "equal"
     }
   });
 
   const selectedType = form.watch("type");
-  const participantIds = form.watch("participantIds");
+  const selectedAmount = Number(form.watch("amount")) || 0;
+  const splitMode = form.watch("splitMode");
   const visibleCategories = categories.filter((category) => category.type === selectedType);
 
   return (
@@ -142,23 +148,42 @@ export default function NewTransactionScreen() {
         <Text variant="section">付款人與分帳</Text>
         <Text variant="muted">付款人</Text>
         <View style={styles.chips}>
-          {people.map((person) => (
-            <Controller
-              key={person.id}
-              control={form.control}
-              name="payerId"
-              render={({ field }) => (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => field.onChange(person.id)}
-                  style={[styles.chip, field.value === person.id && styles.selectedChip]}
-                >
-                  <Text style={field.value === person.id && styles.selectedChipText}>{person.name}</Text>
-                </Pressable>
-              )}
-            />
-          ))}
+          {people.map((person) => {
+            const selected = payerIds.includes(person.id);
+            return (
+              <Pressable
+                key={person.id}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected }}
+                onPress={() => {
+                  const next = selected ? payerIds.filter((id) => id !== person.id) : [...payerIds, person.id];
+                  const safeNext = next.length ? next : [person.id];
+                  setPayerIds(safeNext);
+                  form.setValue("payerId", safeNext[0]);
+                }}
+                style={[styles.chip, selected && styles.selectedChip]}
+              >
+                <Text style={selected && styles.selectedChipText}>{person.name}</Text>
+              </Pressable>
+            );
+          })}
         </View>
+        {payerIds.map((personId) => {
+          const person = people.find((item) => item.id === personId);
+          return (
+            <View key={personId} style={styles.amountRow}>
+              <Text style={styles.rowLabel}>{person?.name ?? "未知"} 先付</Text>
+              <TextInput
+                keyboardType="decimal-pad"
+                value={paymentAmounts[personId] ?? ""}
+                onChangeText={(value) => setPaymentAmounts((current) => ({ ...current, [personId]: value }))}
+                placeholder={payerIds.length === 1 ? String(selectedAmount || "") : "0"}
+                placeholderTextColor={palette.mutedText}
+                style={styles.rowInput}
+              />
+            </View>
+          );
+        })}
         {selectedType === "expense" ? (
           <>
             <Controller
@@ -179,15 +204,15 @@ export default function NewTransactionScreen() {
             <Text variant="muted">分帳人</Text>
             <View style={styles.chips}>
               {people.map((person) => {
-                const selected = participantIds.includes(person.id);
+                const selected = splitPersonIds.includes(person.id);
                 return (
                   <Pressable
                     key={person.id}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: selected }}
                     onPress={() => {
-                      const next = selected ? participantIds.filter((id) => id !== person.id) : [...participantIds, person.id];
-                      form.setValue("participantIds", next.length ? next : [person.id]);
+                      const next = selected ? splitPersonIds.filter((id) => id !== person.id) : [...splitPersonIds, person.id];
+                      setSplitPersonIds(next.length ? next : [person.id]);
                     }}
                     style={[styles.chip, selected && styles.selectedChip]}
                   >
@@ -196,8 +221,36 @@ export default function NewTransactionScreen() {
                 );
               })}
             </View>
+            {splitPersonIds.map((personId, index) => {
+              const person = people.find((item) => item.id === personId);
+              const equalShare = splitPersonIds.length ? selectedAmount / splitPersonIds.length : 0;
+              return (
+                <View key={personId} style={styles.amountRow}>
+                  <Text style={styles.rowLabel}>{person?.name ?? "未知"} 應分</Text>
+                  {splitMode === "equal" ? (
+                    <Text style={styles.previewValue}>{formatPlainNumber(index === splitPersonIds.length - 1 ? selectedAmount - equalShare * (splitPersonIds.length - 1) : equalShare)}</Text>
+                  ) : (
+                    <TextInput
+                      keyboardType="decimal-pad"
+                      value={splitMode === "amount" ? splitAmounts[personId] ?? "" : splitPercents[personId] ?? ""}
+                      onChangeText={(value) => {
+                        if (splitMode === "amount") {
+                          setSplitAmounts((current) => ({ ...current, [personId]: value }));
+                        } else {
+                          setSplitPercents((current) => ({ ...current, [personId]: value }));
+                        }
+                      }}
+                      placeholder={splitMode === "amount" ? "0" : "%"}
+                      placeholderTextColor={palette.mutedText}
+                      style={styles.rowInput}
+                    />
+                  )}
+                </View>
+              );
+            })}
           </>
         ) : null}
+        {allocationError ? <Text style={styles.error}>{allocationError}</Text> : null}
       </Card>
 
       <Card>
@@ -220,10 +273,29 @@ export default function NewTransactionScreen() {
           label="儲存交易"
           icon="checkmark-outline"
           onPress={form.handleSubmit((values) => {
+            const allocation = buildTransactionAllocation({
+              amount: values.amount,
+              type: values.type,
+              payerIds,
+              paymentAmounts,
+              splitPersonIds,
+              splitMode: values.splitMode,
+              splitAmounts,
+              splitPercents
+            });
+
+            if (allocation.error) {
+              setAllocationError(allocation.error);
+              return;
+            }
+
+            setAllocationError("");
             addTransaction({
               ...values,
+              payerId: allocation.payments[0]?.personId ?? values.payerId,
+              payments: allocation.payments,
               tags: values.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-              participantIds: values.type === "expense" ? values.participantIds : []
+              splitAllocations: allocation.splitAllocations
             });
             router.back();
           })}
@@ -289,5 +361,124 @@ const styles = StyleSheet.create({
   error: {
     color: palette.warning,
     fontWeight: "800"
+  },
+  amountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  rowLabel: {
+    width: 96,
+    fontWeight: "800"
+  },
+  rowInput: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: 12,
+    color: palette.text,
+    backgroundColor: palette.surface,
+    outlineStyle: "none"
+  } as object,
+  previewValue: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: palette.background,
+    color: palette.mutedText,
+    lineHeight: 40,
+    fontWeight: "800"
   }
 });
+
+type AllocationInput = {
+  amount: number;
+  type: TransactionType;
+  payerIds: string[];
+  paymentAmounts: Record<string, string>;
+  splitPersonIds: string[];
+  splitMode: SplitMode;
+  splitAmounts: Record<string, string>;
+  splitPercents: Record<string, string>;
+};
+
+function buildTransactionAllocation(input: AllocationInput): {
+  payments: { personId: string; amount: number }[];
+  splitAllocations: { personId: string; amount?: number; percent?: number }[];
+  error?: string;
+} {
+  const payments = input.payerIds.map((personId) => ({
+    personId,
+    amount: parseNumericInput(input.paymentAmounts[personId])
+  }));
+
+  if (payments.length === 1 && payments[0].amount <= 0) {
+    payments[0].amount = input.amount;
+  }
+
+  const paidTotal = roundInputTotal(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  if (Math.abs(paidTotal - input.amount) > 0.01) {
+    return {
+      payments,
+      splitAllocations: [],
+      error: `先付總額需等於交易金額，目前是 ${formatPlainNumber(paidTotal)}。`
+    };
+  }
+
+  if (input.type !== "expense") {
+    return { payments, splitAllocations: [] };
+  }
+
+  if (input.splitMode === "equal") {
+    return {
+      payments,
+      splitAllocations: input.splitPersonIds.map((personId) => ({ personId }))
+    };
+  }
+
+  if (input.splitMode === "amount") {
+    const splitAllocations = input.splitPersonIds.map((personId) => ({
+      personId,
+      amount: parseNumericInput(input.splitAmounts[personId])
+    }));
+    const splitTotal = roundInputTotal(splitAllocations.reduce((sum, split) => sum + (split.amount ?? 0), 0));
+    if (Math.abs(splitTotal - input.amount) > 0.01) {
+      return {
+        payments,
+        splitAllocations,
+        error: `分帳金額總和需等於交易金額，目前是 ${formatPlainNumber(splitTotal)}。`
+      };
+    }
+    return { payments, splitAllocations };
+  }
+
+  const splitAllocations = input.splitPersonIds.map((personId) => ({
+    personId,
+    percent: parseNumericInput(input.splitPercents[personId])
+  }));
+  const percentTotal = roundInputTotal(splitAllocations.reduce((sum, split) => sum + (split.percent ?? 0), 0));
+  if (Math.abs(percentTotal - 100) > 0.01) {
+    return {
+      payments,
+      splitAllocations,
+      error: `分帳比例總和需為 100%，目前是 ${formatPlainNumber(percentTotal)}%。`
+    };
+  }
+  return { payments, splitAllocations };
+}
+
+function parseNumericInput(value?: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function roundInputTotal(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function formatPlainNumber(value: number) {
+  return new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(roundInputTotal(value));
+}

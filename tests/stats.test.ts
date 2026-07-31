@@ -11,6 +11,7 @@ const baseTransaction = {
   currencyCode: "TWD",
   categoryId: "cat-breakfast",
   payerId: "me",
+  payments: [],
   date: new Date(2026, 6, 10).toISOString(),
   note: "",
   tags: [],

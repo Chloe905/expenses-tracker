@@ -31,6 +31,13 @@ export type Currency = {
   isBase: boolean;
 };
 
+export type Payment = {
+  id: string;
+  transactionId: string;
+  personId: string;
+  amount: number;
+};
+
 export type Split = {
   id: string;
   transactionId: string;
@@ -49,6 +56,7 @@ export type Transaction = {
   baseAmount: number;
   categoryId: string;
   payerId: string;
+  payments: Payment[];
   date: string;
   note: string;
   tags: string[];
@@ -63,11 +71,19 @@ export type TransactionDraft = {
   currencyCode: string;
   categoryId: string;
   payerId: string;
+  payments: {
+    personId: string;
+    amount: number;
+  }[];
   date: string;
   note: string;
   tags: string[];
   splitMode: SplitMode;
-  participantIds: string[];
+  splitAllocations: {
+    personId: string;
+    amount?: number;
+    percent?: number;
+  }[];
 };
 
 export type LedgerSnapshot = {

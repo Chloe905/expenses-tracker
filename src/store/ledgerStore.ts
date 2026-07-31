@@ -22,7 +22,7 @@ type LedgerState = LedgerSnapshot & {
 };
 
 function seedSnapshot(): LedgerSnapshot {
-  return { accountBooks, categories, people, currencies, transactions };
+  return normalizeSnapshot({ accountBooks, categories, people, currencies, transactions });
 }
 
 function snapshotFromState(state: LedgerSnapshot): LedgerSnapshot {
@@ -57,13 +57,30 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeSnapshot(snapshot: LedgerSnapshot): LedgerSnapshot {
+  return {
+    ...snapshot,
+    transactions: snapshot.transactions.map((transaction) => ({
+      ...transaction,
+      payments: transaction.payments?.length
+        ? transaction.payments
+        : [{
+          id: `${transaction.id}-payment-${transaction.payerId}`,
+          transactionId: transaction.id,
+          personId: transaction.payerId,
+          amount: transaction.baseAmount
+        }]
+    }))
+  };
+}
+
 export const useLedgerStore = create<LedgerState>((set, get) => ({
   ...seedSnapshot(),
   hydrated: false,
   cloudEnabled: isFirebaseConfigured(),
   syncStatus: isFirebaseConfigured() ? "syncing" : "local",
   hydrate: async () => {
-    const localSnapshot = (await loadSnapshot()) ?? seedSnapshot();
+    const localSnapshot = normalizeSnapshot((await loadSnapshot()) ?? seedSnapshot());
     set({
       ...localSnapshot,
       hydrated: true,
@@ -78,7 +95,7 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
 
     try {
       const cloudSnapshot = await loadCloudSnapshot();
-      const snapshot = cloudSnapshot ?? localSnapshot;
+      const snapshot = normalizeSnapshot(cloudSnapshot ?? localSnapshot);
       set({ ...snapshot, syncStatus: "synced" });
       await persist(snapshot, (syncStatus) => set({ syncStatus }));
     } catch {
@@ -90,6 +107,12 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     const state = get();
     const id = createId("tx");
     const baseAmount = toBaseAmount(draft.amount, draft.currencyCode, state.currencies);
+    const payments = draft.payments.map((payment) => ({
+      id: `${id}-payment-${payment.personId}`,
+      transactionId: id,
+      personId: payment.personId,
+      amount: toBaseAmount(payment.amount, draft.currencyCode, state.currencies)
+    }));
     const transaction: Transaction = {
       id,
       accountBookId: state.accountBooks[0].id,
@@ -99,11 +122,21 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       baseAmount,
       categoryId: draft.categoryId,
       payerId: draft.payerId,
+      payments,
       date: draft.date,
       note: draft.note,
       tags: draft.tags,
       splitMode: draft.splitMode,
-      splits: draft.type === "expense" ? buildSplits({ transactionId: id, amount: baseAmount, participantIds: draft.participantIds, mode: draft.splitMode }) : [],
+      splits: draft.type === "expense" ? buildSplits({
+        transactionId: id,
+        amount: baseAmount,
+        mode: draft.splitMode,
+        allocations: draft.splitAllocations.map((allocation) => ({
+          personId: allocation.personId,
+          amount: allocation.amount === undefined ? undefined : toBaseAmount(allocation.amount, draft.currencyCode, state.currencies),
+          percent: allocation.percent
+        }))
+      }) : [],
       createdAt: new Date().toISOString()
     };
     const next = { ...state, transactions: [transaction, ...state.transactions] };
@@ -121,11 +154,21 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       currencyCode: transaction.currencyCode,
       categoryId: transaction.categoryId,
       payerId: transaction.payerId,
+      payments: transaction.payments?.length
+        ? transaction.payments.map((payment) => ({
+          personId: payment.personId,
+          amount: payment.amount / (get().currencies.find((currency) => currency.code === transaction.currencyCode)?.rateToBase ?? 1)
+        }))
+        : [{ personId: transaction.payerId, amount: transaction.amount }],
       date: new Date().toISOString(),
       note: transaction.note,
       tags: transaction.tags,
       splitMode: transaction.splitMode,
-      participantIds: transaction.splits.map((split) => split.personId)
+      splitAllocations: transaction.splits.map((split) => ({
+        personId: split.personId,
+        amount: split.amount / (get().currencies.find((currency) => currency.code === transaction.currencyCode)?.rateToBase ?? 1),
+        percent: split.percent
+      }))
     });
   },
   addPerson: (name) => {
