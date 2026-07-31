@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Alert, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
+import { DeleteTransactionModal } from "@/components/DeleteTransactionModal";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
@@ -19,6 +20,7 @@ export default function SettingsScreen() {
   const addCategory = useLedgerStore((state) => state.addCategory);
   const deleteCategory = useLedgerStore((state) => state.deleteCategory);
   const addCurrency = useLedgerStore((state) => state.addCurrency);
+  const deleteCurrency = useLedgerStore((state) => state.deleteCurrency);
   const updateCurrencyRate = useLedgerStore((state) => state.updateCurrencyRate);
   const exportSnapshot = useLedgerStore((state) => state.exportSnapshot);
   const importSnapshot = useLedgerStore((state) => state.importSnapshot);
@@ -32,6 +34,7 @@ export default function SettingsScreen() {
   const [currencyName, setCurrencyName] = useState("");
   const [currencyRate, setCurrencyRate] = useState("");
   const [importText, setImportText] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const expenseCategories = categories.filter((category) => category.type === "expense");
 
   const showMessage = (message: string) => {
@@ -67,7 +70,17 @@ export default function SettingsScreen() {
               </View>
               <Text>{person.name}</Text>
               {person.id !== "person-me" ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={`刪除${person.name}`} onPress={() => deletePerson(person.id)} style={styles.smallIconButton}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`刪除${person.name}`}
+                  onPress={() => setPendingDelete({
+                    type: "person",
+                    id: person.id,
+                    title: "刪除分帳人",
+                    message: `確定要刪除「${person.name}」嗎？既有交易紀錄會保留原金額，但之後不能再選到這位分帳人。`
+                  })}
+                  style={styles.smallIconButton}
+                >
                   <Ionicons name="close" size={16} color={palette.expense} />
                 </Pressable>
               ) : null}
@@ -106,7 +119,17 @@ export default function SettingsScreen() {
               </View>
               <Text style={styles.categoryName}>{category.name}</Text>
               {expenseCategories.length > 1 ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={`刪除${category.name}`} onPress={() => deleteCategory(category.id)} style={styles.smallIconButton}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`刪除${category.name}`}
+                  onPress={() => setPendingDelete({
+                    type: "category",
+                    id: category.id,
+                    title: "刪除支出分類",
+                    message: `確定要刪除「${category.name}」嗎？既有交易會保留資料，但新增交易時不能再選這個分類。`
+                  })}
+                  style={styles.smallIconButton}
+                >
                   <Ionicons name="trash-outline" size={16} color={palette.expense} />
                 </Pressable>
               ) : null}
@@ -172,18 +195,35 @@ export default function SettingsScreen() {
               <Text>{currency.code} · {currency.name}</Text>
               <Text variant="muted">換算範例：{formatMoney(currency.rateToBase)}</Text>
             </View>
-            <TextInput
-              editable={!currency.isBase}
-              keyboardType="decimal-pad"
-              value={String(currency.rateToBase)}
-              onChangeText={(value) => {
-                const nextRate = Number(value);
-                if (Number.isFinite(nextRate) && nextRate > 0) {
-                  updateCurrencyRate(currency.code, nextRate);
-                }
-              }}
-              style={[styles.rateInput, currency.isBase && styles.disabledInput]}
-            />
+            <View style={styles.currencyActions}>
+              <TextInput
+                editable={!currency.isBase}
+                keyboardType="decimal-pad"
+                value={String(currency.rateToBase)}
+                onChangeText={(value) => {
+                  const nextRate = Number(value);
+                  if (Number.isFinite(nextRate) && nextRate > 0) {
+                    updateCurrencyRate(currency.code, nextRate);
+                  }
+                }}
+                style={[styles.rateInput, currency.isBase && styles.disabledInput]}
+              />
+              {!currency.isBase ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`刪除${currency.code}`}
+                  onPress={() => setPendingDelete({
+                    type: "currency",
+                    id: currency.code,
+                    title: "刪除幣別",
+                    message: `確定要刪除「${currency.code} · ${currency.name}」嗎？既有交易紀錄會保留原幣別資料，但之後不能再選到這個幣別。`
+                  })}
+                  style={styles.smallIconButton}
+                >
+                  <Ionicons name="trash-outline" size={16} color={palette.expense} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         ))}
         <View style={styles.currencyForm}>
@@ -267,6 +307,25 @@ export default function SettingsScreen() {
           }}
         />
       </Card>
+      <DeleteTransactionModal
+        visible={pendingDelete !== null}
+        title={pendingDelete?.title}
+        message={pendingDelete?.message}
+        confirmLabel="確認刪除"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete?.type === "person") {
+            deletePerson(pendingDelete.id);
+          }
+          if (pendingDelete?.type === "category") {
+            deleteCategory(pendingDelete.id);
+          }
+          if (pendingDelete?.type === "currency") {
+            deleteCurrency(pendingDelete.id);
+          }
+          setPendingDelete(null);
+        }}
+      />
     </Screen>
   );
 }
@@ -395,6 +454,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12
   },
+  currencyActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
   rateInput: {
     width: 96,
     minHeight: 40,
@@ -446,3 +510,10 @@ function getSyncStatusLabel(syncStatus: "local" | "syncing" | "synced" | "error"
 
 const categoryColors = ["#C9A6A0", "#8E9AAF", "#BCA88D", "#A48E89", "#B87D73", "#8FA89B", "#9AA77D"];
 const categoryIcons = ["receipt", "cart", "cafe", "restaurant", "train", "home", "bag", "heart", "game-controller", "book"];
+
+type PendingDelete = {
+  type: "person" | "category" | "currency";
+  id: string;
+  title: string;
+  message: string;
+};

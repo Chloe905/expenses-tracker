@@ -7,11 +7,21 @@ import { palette } from "@/theme/palette";
 
 type DeleteTransactionModalProps = {
   visible: boolean;
+  title?: string;
+  message?: string;
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 };
 
-export function DeleteTransactionModal({ visible, onCancel, onConfirm }: DeleteTransactionModalProps) {
+export function DeleteTransactionModal({
+  visible,
+  title = "刪除交易",
+  message = "確定要刪除這筆交易嗎？刪除後無法復原。",
+  confirmLabel = "確認刪除",
+  onCancel,
+  onConfirm
+}: DeleteTransactionModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable accessibilityRole="button" accessibilityLabel="取消刪除" onPress={onCancel} style={styles.backdrop}>
@@ -19,11 +29,11 @@ export function DeleteTransactionModal({ visible, onCancel, onConfirm }: DeleteT
           <View style={styles.icon}>
             <Ionicons name="trash-outline" size={24} color={palette.expense} />
           </View>
-          <Text style={styles.title}>刪除交易</Text>
-          <Text variant="muted" style={styles.message}>確定要刪除這筆交易嗎？刪除後無法復原。</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text variant="muted" style={styles.message}>{message}</Text>
           <View style={styles.actions}>
             <PrimaryButton label="取消" variant="secondary" onPress={onCancel} />
-            <PrimaryButton label="確認刪除" icon="trash-outline" variant="danger" onPress={onConfirm} />
+            <PrimaryButton label={confirmLabel} icon="trash-outline" variant="danger" onPress={onConfirm} />
           </View>
         </View>
       </Pressable>

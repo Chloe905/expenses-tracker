@@ -21,6 +21,7 @@ type LedgerState = LedgerSnapshot & {
   addCategory: (category: Omit<Category, "id" | "order">) => void;
   deleteCategory: (categoryId: string) => void;
   addCurrency: (currency: Omit<Currency, "isBase">) => void;
+  deleteCurrency: (code: string) => void;
   updateCurrencyRate: (code: string, rateToBase: number) => void;
   importSnapshot: (snapshot: LedgerSnapshot) => void;
   exportSnapshot: () => LedgerSnapshot;
@@ -271,6 +272,16 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       isBase: false
     };
     const next = { ...state, currencies: [...state.currencies, nextCurrency] };
+    set({ currencies: next.currencies });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
+  deleteCurrency: (code) => {
+    const state = get();
+    const currency = state.currencies.find((item) => item.code === code);
+    if (!currency || currency.isBase || state.currencies.length <= 1) {
+      return;
+    }
+    const next = { ...state, currencies: state.currencies.filter((item) => item.code !== code) };
     set({ currencies: next.currencies });
     void persist(next, (syncStatus) => set({ syncStatus }));
   },
