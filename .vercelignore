@@ -1,0 +1,9 @@
+.env
+.env.*
+.vercel
+node_modules
+.expo
+dist
+web-build
+*.tsbuildinfo
+npm-debug.log*

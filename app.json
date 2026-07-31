@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "莫蘭迪記帳",
+    "slug": "morandi-ledger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "morandiledger",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chloe.morandiledger"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}
