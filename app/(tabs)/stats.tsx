@@ -14,6 +14,7 @@ export default function StatsScreen() {
   const summary = getMonthlySummary(transactions);
   const categoryTotals = getCategoryTotals(transactions, categories);
   const maxAmount = Math.max(...categoryTotals.map((item) => item.amount), 1);
+  const totalExpenseByCategory = categoryTotals.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <Screen>
@@ -38,6 +39,27 @@ export default function StatsScreen() {
 
       <Card>
         <Text variant="section">分類占比</Text>
+        {categoryTotals.length ? (
+          <View style={styles.pieSection}>
+            <View style={[styles.pieChart, { backgroundImage: getPieGradient(categoryTotals) } as object]}>
+              <View style={styles.pieCenter}>
+                <Text style={styles.pieTotal}>{formatMoney(totalExpenseByCategory)}</Text>
+                <Text variant="muted">總支出</Text>
+              </View>
+            </View>
+            <View style={styles.pieLegend}>
+              {categoryTotals.map(({ category, amount }) => (
+                <View key={category.id} style={styles.legendRow}>
+                  <View style={[styles.dot, { backgroundColor: category.color }]} />
+                  <Text style={styles.legendName} numberOfLines={1}>{category.name}</Text>
+                  <Text style={styles.legendPercent}>{formatPercent(amount, totalExpenseByCategory)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <Text variant="muted">目前沒有支出分類資料。</Text>
+        )}
         {categoryTotals.map(({ category, amount }) => (
           <View key={category.id} style={styles.barRow}>
             <View style={styles.barLabel}>
@@ -80,6 +102,50 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontWeight: "900"
   },
+  pieSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    flexWrap: "wrap"
+  },
+  pieChart: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.surfaceAlt
+  },
+  pieCenter: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.surface
+  },
+  pieTotal: {
+    fontWeight: "900"
+  },
+  pieLegend: {
+    flex: 1,
+    minWidth: 180,
+    gap: 8
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  legendName: {
+    flex: 1,
+    minWidth: 0,
+    fontWeight: "800"
+  },
+  legendPercent: {
+    fontWeight: "900",
+    color: palette.mutedText
+  },
   barRow: {
     gap: 8,
     paddingVertical: 6
@@ -105,3 +171,26 @@ const styles = StyleSheet.create({
     borderRadius: 5
   }
 });
+
+function getPieGradient(items: { category: { color: string }; amount: number }[]) {
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  if (total <= 0) {
+    return `conic-gradient(${palette.surfaceAlt} 0deg 360deg)`;
+  }
+
+  let cursor = 0;
+  const stops = items.map((item) => {
+    const start = cursor;
+    const size = (item.amount / total) * 360;
+    cursor += size;
+    return `${item.category.color} ${start.toFixed(2)}deg ${cursor.toFixed(2)}deg`;
+  });
+  return `conic-gradient(${stops.join(", ")})`;
+}
+
+function formatPercent(amount: number, total: number) {
+  if (total <= 0) {
+    return "0%";
+  }
+  return `${Math.round((amount / total) * 100)}%`;
+}
