@@ -13,6 +13,8 @@ type LedgerState = LedgerSnapshot & {
   syncStatus: "local" | "syncing" | "synced" | "error";
   hydrate: () => Promise<void>;
   addTransaction: (draft: TransactionDraft) => void;
+  updateTransaction: (transactionId: string, draft: TransactionDraft) => void;
+  deleteTransaction: (transactionId: string) => void;
   duplicateTransaction: (transactionId: string) => void;
   addPerson: (name: string) => void;
   addCategory: (category: Omit<Category, "id" | "order">) => void;
@@ -55,6 +57,49 @@ async function persist(state: LedgerSnapshot, setSyncStatus?: (status: LedgerSta
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildTransactionFromDraft(
+  state: LedgerSnapshot,
+  draft: TransactionDraft,
+  id: string,
+  accountBookId: string,
+  createdAt: string
+): Transaction {
+  const baseAmount = toBaseAmount(draft.amount, draft.currencyCode, state.currencies);
+  const payments = draft.payments.map((payment) => ({
+    id: `${id}-payment-${payment.personId}`,
+    transactionId: id,
+    personId: payment.personId,
+    amount: toBaseAmount(payment.amount, draft.currencyCode, state.currencies)
+  }));
+
+  return {
+    id,
+    accountBookId,
+    type: draft.type,
+    amount: draft.amount,
+    currencyCode: draft.currencyCode,
+    baseAmount,
+    categoryId: draft.categoryId,
+    payerId: draft.payerId,
+    payments,
+    date: draft.date,
+    note: draft.note,
+    tags: draft.tags,
+    splitMode: draft.splitMode,
+    splits: draft.type === "expense" ? buildSplits({
+      transactionId: id,
+      amount: baseAmount,
+      mode: draft.splitMode,
+      allocations: draft.splitAllocations.map((allocation) => ({
+        personId: allocation.personId,
+        amount: allocation.amount === undefined ? undefined : toBaseAmount(allocation.amount, draft.currencyCode, state.currencies),
+        percent: allocation.percent
+      }))
+    }) : [],
+    createdAt
+  };
 }
 
 function normalizeSnapshot(snapshot: LedgerSnapshot): LedgerSnapshot {
@@ -106,40 +151,32 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
   addTransaction: (draft) => {
     const state = get();
     const id = createId("tx");
-    const baseAmount = toBaseAmount(draft.amount, draft.currencyCode, state.currencies);
-    const payments = draft.payments.map((payment) => ({
-      id: `${id}-payment-${payment.personId}`,
-      transactionId: id,
-      personId: payment.personId,
-      amount: toBaseAmount(payment.amount, draft.currencyCode, state.currencies)
-    }));
-    const transaction: Transaction = {
-      id,
-      accountBookId: state.accountBooks[0].id,
-      type: draft.type,
-      amount: draft.amount,
-      currencyCode: draft.currencyCode,
-      baseAmount,
-      categoryId: draft.categoryId,
-      payerId: draft.payerId,
-      payments,
-      date: draft.date,
-      note: draft.note,
-      tags: draft.tags,
-      splitMode: draft.splitMode,
-      splits: draft.type === "expense" ? buildSplits({
-        transactionId: id,
-        amount: baseAmount,
-        mode: draft.splitMode,
-        allocations: draft.splitAllocations.map((allocation) => ({
-          personId: allocation.personId,
-          amount: allocation.amount === undefined ? undefined : toBaseAmount(allocation.amount, draft.currencyCode, state.currencies),
-          percent: allocation.percent
-        }))
-      }) : [],
-      createdAt: new Date().toISOString()
-    };
+    const transaction = buildTransactionFromDraft(state, draft, id, state.accountBooks[0].id, new Date().toISOString());
     const next = { ...state, transactions: [transaction, ...state.transactions] };
+    set({ transactions: next.transactions });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
+  updateTransaction: (transactionId, draft) => {
+    const state = get();
+    const existing = state.transactions.find((item) => item.id === transactionId);
+    if (!existing) {
+      return;
+    }
+
+    const transaction = buildTransactionFromDraft(state, draft, existing.id, existing.accountBookId, existing.createdAt);
+    const next = {
+      ...state,
+      transactions: state.transactions.map((item) => item.id === transactionId ? transaction : item)
+    };
+    set({ transactions: next.transactions });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
+  deleteTransaction: (transactionId) => {
+    const state = get();
+    const next = {
+      ...state,
+      transactions: state.transactions.filter((item) => item.id !== transactionId)
+    };
     set({ transactions: next.transactions });
     void persist(next, (syncStatus) => set({ syncStatus }));
   },

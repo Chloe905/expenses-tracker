@@ -10,15 +10,17 @@ type TransactionRowProps = {
   transaction: Transaction;
   category?: Category;
   payer?: Person;
-  onDuplicate?: () => void;
+  onOpen?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 };
 
-export function TransactionRow({ transaction, category, payer, onDuplicate }: TransactionRowProps) {
+export function TransactionRow({ transaction, category, payer, onOpen, onEdit, onDelete }: TransactionRowProps) {
   const amountColor = transaction.type === "income" ? palette.income : transaction.type === "expense" ? palette.expense : palette.transfer;
   const sign = transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : "";
 
   return (
-    <View style={styles.row}>
+    <Pressable accessibilityRole="button" accessibilityLabel="查看交易" onPress={onOpen} style={styles.row}>
       <View style={[styles.icon, { backgroundColor: category?.color ?? palette.surfaceAlt }]}>
         <Ionicons name={(category?.icon ?? "receipt") as keyof typeof Ionicons.glyphMap} size={18} color={palette.surface} />
       </View>
@@ -28,13 +30,32 @@ export function TransactionRow({ transaction, category, payer, onDuplicate }: Tr
       </View>
       <View style={styles.amountGroup}>
         <Text style={[styles.amount, { color: amountColor }]}>{sign}{formatMoney(transaction.baseAmount)}</Text>
-        {onDuplicate ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="複製交易" onPress={onDuplicate} style={styles.copy}>
-            <Ionicons name="copy-outline" size={16} color={palette.mutedText} />
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="編輯交易"
+            onPress={(event) => {
+              event.stopPropagation();
+              onEdit?.();
+            }}
+            style={styles.actionButton}
+          >
+            <Ionicons name="create-outline" size={17} color={palette.mutedText} />
           </Pressable>
-        ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="刪除交易"
+            onPress={(event) => {
+              event.stopPropagation();
+              onDelete?.();
+            }}
+            style={styles.actionButton}
+          >
+            <Ionicons name="trash-outline" size={17} color={palette.expense} />
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -66,7 +87,11 @@ const styles = StyleSheet.create({
   amount: {
     fontWeight: "900"
   },
-  copy: {
+  actions: {
+    flexDirection: "row",
+    gap: 4
+  },
+  actionButton: {
     width: 28,
     height: 28,
     alignItems: "center",

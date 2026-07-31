@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
@@ -31,10 +31,14 @@ type FormValues = z.infer<typeof schema>;
 
 export default function NewTransactionScreen() {
   const router = useRouter();
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const transactions = useLedgerStore((state) => state.transactions);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
   const currencies = useLedgerStore((state) => state.currencies);
   const addTransaction = useLedgerStore((state) => state.addTransaction);
+  const updateTransaction = useLedgerStore((state) => state.updateTransaction);
+  const editingTransaction = transactions.find((transaction) => transaction.id === editId);
   const [payerIds, setPayerIds] = useState(["person-me"]);
   const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
   const [splitPersonIds, setSplitPersonIds] = useState(["person-me"]);
@@ -61,6 +65,36 @@ export default function NewTransactionScreen() {
   const selectedAmount = Number(form.watch("amount")) || 0;
   const splitMode = form.watch("splitMode");
   const visibleCategories = categories.filter((category) => category.type === selectedType);
+  const title = editingTransaction ? "編輯記帳" : "新增記帳";
+
+  useEffect(() => {
+    if (!editingTransaction) {
+      return;
+    }
+
+    const rate = getCurrencyRate(editingTransaction.currencyCode, currencies);
+    const payments = editingTransaction.payments?.length
+      ? editingTransaction.payments
+      : [{ personId: editingTransaction.payerId, amount: editingTransaction.baseAmount }];
+    const splits = editingTransaction.splits;
+
+    form.reset({
+      type: editingTransaction.type,
+      amount: editingTransaction.amount,
+      currencyCode: editingTransaction.currencyCode,
+      categoryId: editingTransaction.categoryId,
+      payerId: editingTransaction.payerId,
+      date: editingTransaction.date,
+      note: editingTransaction.note,
+      tags: editingTransaction.tags.join(", "),
+      splitMode: editingTransaction.splitMode
+    });
+    setPayerIds(payments.map((payment) => payment.personId));
+    setPaymentAmounts(Object.fromEntries(payments.map((payment) => [payment.personId, formatInputNumber(payment.amount / rate)])));
+    setSplitPersonIds(splits.length ? splits.map((split) => split.personId) : [editingTransaction.payerId]);
+    setSplitAmounts(Object.fromEntries(splits.map((split) => [split.personId, formatInputNumber(split.amount / rate)])));
+    setSplitPercents(Object.fromEntries(splits.map((split) => [split.personId, split.percent === undefined ? "" : formatInputNumber(split.percent)])));
+  }, [currencies, editingTransaction, form]);
 
   useEffect(() => {
     if (selectedAmount <= 0 || payerIds.length !== 1) {
@@ -111,7 +145,7 @@ export default function NewTransactionScreen() {
       />
 
       <Card>
-        <Text variant="section">金額與分類</Text>
+        <Text variant="section">{title}</Text>
         <Controller
           control={form.control}
           name="amount"
@@ -297,7 +331,7 @@ export default function NewTransactionScreen() {
           )}
         />
         <PrimaryButton
-          label="儲存交易"
+          label={editingTransaction ? "更新交易" : "儲存交易"}
           icon="checkmark-outline"
           onPress={form.handleSubmit((values) => {
             const allocation = buildTransactionAllocation({
@@ -317,13 +351,18 @@ export default function NewTransactionScreen() {
             }
 
             setAllocationError("");
-            addTransaction({
+            const draft = {
               ...values,
               payerId: allocation.payments[0]?.personId ?? values.payerId,
               payments: allocation.payments,
               tags: values.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
               splitAllocations: allocation.splitAllocations
-            });
+            };
+            if (editingTransaction) {
+              updateTransaction(editingTransaction.id, draft);
+            } else {
+              addTransaction(draft);
+            }
             router.back();
           })}
         />
@@ -542,4 +581,12 @@ function roundInputTotal(value: number) {
 
 function formatPlainNumber(value: number) {
   return new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 2 }).format(roundInputTotal(value));
+}
+
+function formatInputNumber(value: number) {
+  return String(roundInputTotal(value));
+}
+
+function getCurrencyRate(currencyCode: string, currencies: { code: string; rateToBase: number }[]) {
+  return currencies.find((currency) => currency.code === currencyCode)?.rateToBase ?? 1;
 }

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { Screen } from "@/components/Screen";
@@ -13,12 +13,13 @@ import { palette } from "@/theme/palette";
 import { TransactionType } from "@/types/ledger";
 
 export default function LedgerScreen() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [type, setType] = useState<TransactionType | "all">("all");
   const transactions = useLedgerStore((state) => state.transactions);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
-  const duplicateTransaction = useLedgerStore((state) => state.duplicateTransaction);
+  const deleteTransaction = useLedgerStore((state) => state.deleteTransaction);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
@@ -70,7 +71,14 @@ export default function LedgerScreen() {
             transaction={transaction}
             category={categories.find((item) => item.id === transaction.categoryId)}
             payer={people.find((item) => item.id === transaction.payerId)}
-            onDuplicate={() => duplicateTransaction(transaction.id)}
+            onOpen={() => router.push(`/transaction/${transaction.id}`)}
+            onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
+            onDelete={() => {
+              Alert.alert("刪除交易", "確定要刪除這筆交易嗎？", [
+                { text: "取消", style: "cancel" },
+                { text: "刪除", style: "destructive", onPress: () => deleteTransaction(transaction.id) }
+              ]);
+            }}
           />
         ))}
         {!filteredTransactions.length ? <Text variant="muted">沒有符合條件的交易。</Text> : null}

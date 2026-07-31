@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Link, useRouter } from "expo-router";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { Screen } from "@/components/Screen";
@@ -12,10 +12,11 @@ import { useLedgerStore } from "@/store/ledgerStore";
 import { palette } from "@/theme/palette";
 
 export default function OverviewScreen() {
+  const router = useRouter();
   const transactions = useLedgerStore((state) => state.transactions);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
-  const duplicateTransaction = useLedgerStore((state) => state.duplicateTransaction);
+  const deleteTransaction = useLedgerStore((state) => state.deleteTransaction);
   const summary = getMonthlySummary(transactions);
   const today = new Date().toDateString();
   const todayTransactions = transactions.filter((item) => new Date(item.date).toDateString() === today).slice(0, 5);
@@ -68,7 +69,14 @@ export default function OverviewScreen() {
             transaction={transaction}
             category={categories.find((item) => item.id === transaction.categoryId)}
             payer={people.find((item) => item.id === transaction.payerId)}
-            onDuplicate={() => duplicateTransaction(transaction.id)}
+            onOpen={() => router.push(`/transaction/${transaction.id}`)}
+            onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
+            onDelete={() => {
+              Alert.alert("刪除交易", "確定要刪除這筆交易嗎？", [
+                { text: "取消", style: "cancel" },
+                { text: "刪除", style: "destructive", onPress: () => deleteTransaction(transaction.id) }
+              ]);
+            }}
           />
         )) : <Text variant="muted">今天還沒有交易，點右上角快速新增。</Text>}
       </Card>
