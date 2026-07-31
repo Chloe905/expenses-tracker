@@ -9,9 +9,10 @@ import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Text } from "@/components/Text";
 import { TransactionRow } from "@/components/TransactionRow";
+import { formatMoney } from "@/lib/money";
 import { useLedgerStore } from "@/store/ledgerStore";
 import { palette } from "@/theme/palette";
-import { TransactionType } from "@/types/ledger";
+import { DebtSettlement, Transaction, TransactionType } from "@/types/ledger";
 
 export default function LedgerScreen() {
   const router = useRouter();
@@ -19,18 +20,38 @@ export default function LedgerScreen() {
   const [type, setType] = useState<TransactionType | "all">("all");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const transactions = useLedgerStore((state) => state.transactions);
+  const debtSettlements = useLedgerStore((state) => state.debtSettlements);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
   const deleteTransaction = useLedgerStore((state) => state.deleteTransaction);
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
+  const ledgerItems = useMemo(() => {
+    const transactionItems: LedgerItem[] = transactions.filter((transaction) => {
       const category = categories.find((item) => item.id === transaction.categoryId);
       const matchesType = type === "all" || transaction.type === type;
       const text = `${transaction.note} ${transaction.tags.join(" ")} ${category?.name ?? ""}`.toLowerCase();
       return matchesType && text.includes(query.toLowerCase());
-    });
-  }, [categories, query, transactions, type]);
+    }).map((transaction) => ({
+      kind: "transaction",
+      id: transaction.id,
+      date: transaction.createdAt,
+      transaction
+    }));
+
+    const settlementItems: LedgerItem[] = type === "all" ? debtSettlements.filter((settlement) => {
+      const fromName = getPersonName(people, settlement.fromPersonId);
+      const toName = getPersonName(people, settlement.toPersonId);
+      const text = `${fromName} ${toName} 已結清 債務結清`.toLowerCase();
+      return text.includes(query.toLowerCase());
+    }).map((settlement) => ({
+      kind: "settlement",
+      id: settlement.id,
+      date: settlement.settledAt,
+      settlement
+    })) : [];
+
+    return [...transactionItems, ...settlementItems].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [categories, debtSettlements, people, query, transactions, type]);
 
   return (
     <Screen>
@@ -67,18 +88,27 @@ export default function LedgerScreen() {
       </Card>
 
       <Card>
-        {filteredTransactions.map((transaction) => (
-          <TransactionRow
-            key={transaction.id}
-            transaction={transaction}
-            category={categories.find((item) => item.id === transaction.categoryId)}
-            payer={people.find((item) => item.id === transaction.payerId)}
-            onOpen={() => router.push(`/transaction/${transaction.id}`)}
-            onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
-            onDelete={() => setPendingDeleteId(transaction.id)}
-          />
+        {ledgerItems.map((item) => (
+          item.kind === "transaction" ? (
+            <TransactionRow
+              key={item.id}
+              transaction={item.transaction}
+              category={categories.find((category) => category.id === item.transaction.categoryId)}
+              payer={people.find((person) => person.id === item.transaction.payerId)}
+              onOpen={() => router.push(`/transaction/${item.transaction.id}`)}
+              onEdit={() => router.push(`/transaction/new?editId=${item.transaction.id}`)}
+              onDelete={() => setPendingDeleteId(item.transaction.id)}
+            />
+          ) : (
+            <SettlementLedgerRow
+              key={item.id}
+              settlement={item.settlement}
+              fromName={getPersonName(people, item.settlement.fromPersonId)}
+              toName={getPersonName(people, item.settlement.toPersonId)}
+            />
+          )
         ))}
-        {!filteredTransactions.length ? <Text variant="muted">沒有符合條件的交易。</Text> : null}
+        {!ledgerItems.length ? <Text variant="muted">沒有符合條件的交易。</Text> : null}
       </Card>
       <DeleteTransactionModal
         visible={pendingDeleteId !== null}
@@ -92,6 +122,33 @@ export default function LedgerScreen() {
       />
     </Screen>
   );
+}
+
+type LedgerItem =
+  | { kind: "transaction"; id: string; date: string; transaction: Transaction }
+  | { kind: "settlement"; id: string; date: string; settlement: DebtSettlement };
+
+function SettlementLedgerRow({ settlement, fromName, toName }: { settlement: DebtSettlement; fromName: string; toName: string }) {
+  return (
+    <View style={styles.settlementRow}>
+      <View style={styles.settlementIcon}>
+        <Ionicons name="checkmark-done-outline" size={18} color={palette.surface} />
+      </View>
+      <View style={styles.settlementCopy}>
+        <Text style={styles.settlementTitle}>{fromName} 付給 {toName}</Text>
+        <Text variant="muted" numberOfLines={1}>已結清 · {formatDate(settlement.settledAt)}</Text>
+      </View>
+      <Text style={styles.settlementAmount}>{formatMoney(settlement.amount)}</Text>
+    </View>
+  );
+}
+
+function getPersonName(people: { id: string; name: string }[], personId: string) {
+  return people.find((person) => person.id === personId)?.name ?? "未知";
+}
+
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat("zh-TW", { month: "2-digit", day: "2-digit" }).format(new Date(date));
 }
 
 const styles = StyleSheet.create({
@@ -124,5 +181,30 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 15,
     outlineStyle: "none"
-  } as object
+  } as object,
+  settlementRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10
+  },
+  settlementIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.income
+  },
+  settlementCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  settlementTitle: {
+    fontWeight: "800"
+  },
+  settlementAmount: {
+    color: palette.income,
+    fontWeight: "900"
+  }
 });
