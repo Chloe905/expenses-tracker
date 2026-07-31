@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Alert, Platform, StyleSheet, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -11,15 +12,27 @@ import { palette } from "@/theme/palette";
 
 export default function SettingsScreen() {
   const people = useLedgerStore((state) => state.people);
+  const categories = useLedgerStore((state) => state.categories);
   const currencies = useLedgerStore((state) => state.currencies);
   const addPerson = useLedgerStore((state) => state.addPerson);
+  const deletePerson = useLedgerStore((state) => state.deletePerson);
+  const addCategory = useLedgerStore((state) => state.addCategory);
+  const deleteCategory = useLedgerStore((state) => state.deleteCategory);
+  const addCurrency = useLedgerStore((state) => state.addCurrency);
   const updateCurrencyRate = useLedgerStore((state) => state.updateCurrencyRate);
   const exportSnapshot = useLedgerStore((state) => state.exportSnapshot);
   const importSnapshot = useLedgerStore((state) => state.importSnapshot);
   const cloudEnabled = useLedgerStore((state) => state.cloudEnabled);
   const syncStatus = useLedgerStore((state) => state.syncStatus);
   const [personName, setPersonName] = useState("");
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryIcon, setCategoryIcon] = useState("receipt");
+  const [categoryColor, setCategoryColor] = useState("#C9A6A0");
+  const [currencyCode, setCurrencyCode] = useState("");
+  const [currencyName, setCurrencyName] = useState("");
+  const [currencyRate, setCurrencyRate] = useState("");
   const [importText, setImportText] = useState("");
+  const expenseCategories = categories.filter((category) => category.type === "expense");
 
   const showMessage = (message: string) => {
     if (Platform.OS === "web") {
@@ -53,6 +66,11 @@ export default function SettingsScreen() {
                 <Text style={styles.avatarText}>{person.name.slice(0, 1)}</Text>
               </View>
               <Text>{person.name}</Text>
+              {person.id !== "person-me" ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={`刪除${person.name}`} onPress={() => deletePerson(person.id)} style={styles.smallIconButton}>
+                  <Ionicons name="close" size={16} color={palette.expense} />
+                </Pressable>
+              ) : null}
             </View>
           ))}
         </View>
@@ -73,6 +91,74 @@ export default function SettingsScreen() {
               }
               addPerson(personName.trim());
               setPersonName("");
+            }}
+          />
+        </View>
+      </Card>
+
+      <Card>
+        <Text variant="section">支出分類</Text>
+        <View style={styles.categoryGrid}>
+          {expenseCategories.map((category) => (
+            <View key={category.id} style={styles.categoryItem}>
+              <View style={[styles.categoryIcon, { backgroundColor: category.color }]}>
+                <Ionicons name={category.icon as keyof typeof Ionicons.glyphMap} size={16} color={palette.surface} />
+              </View>
+              <Text style={styles.categoryName}>{category.name}</Text>
+              {expenseCategories.length > 1 ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={`刪除${category.name}`} onPress={() => deleteCategory(category.id)} style={styles.smallIconButton}>
+                  <Ionicons name="trash-outline" size={16} color={palette.expense} />
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+        </View>
+        <View style={styles.swatches}>
+          {categoryColors.map((color) => (
+            <Pressable
+              key={color}
+              accessibilityRole="button"
+              accessibilityLabel={`選擇分類顏色 ${color}`}
+              onPress={() => setCategoryColor(color)}
+              style={[styles.swatch, { backgroundColor: color }, categoryColor === color && styles.selectedSwatch]}
+            />
+          ))}
+        </View>
+        <View style={styles.iconChoices}>
+          {categoryIcons.map((icon) => (
+            <Pressable
+              key={icon}
+              accessibilityRole="button"
+              accessibilityLabel={`選擇分類圖示 ${icon}`}
+              onPress={() => setCategoryIcon(icon)}
+              style={[styles.iconChoice, categoryIcon === icon && styles.selectedIconChoice]}
+            >
+              <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={18} color={categoryIcon === icon ? palette.surface : palette.text} />
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.inlineForm}>
+          <TextInput
+            value={categoryName}
+            onChangeText={setCategoryName}
+            placeholder="新增支出分類"
+            placeholderTextColor={palette.mutedText}
+            style={styles.input}
+          />
+          <PrimaryButton
+            label="加入"
+            icon="add-circle-outline"
+            onPress={() => {
+              if (!categoryName.trim()) {
+                return;
+              }
+              addCategory({
+                name: categoryName.trim(),
+                type: "expense",
+                icon: categoryIcon,
+                color: categoryColor
+              });
+              setCategoryName("");
             }}
           />
         </View>
@@ -100,6 +186,51 @@ export default function SettingsScreen() {
             />
           </View>
         ))}
+        <View style={styles.currencyForm}>
+          <TextInput
+            value={currencyCode}
+            onChangeText={(value) => setCurrencyCode(value.toUpperCase())}
+            placeholder="代碼，例如 HKD"
+            placeholderTextColor={palette.mutedText}
+            autoCapitalize="characters"
+            maxLength={6}
+            style={[styles.input, styles.codeInput]}
+          />
+          <TextInput
+            value={currencyName}
+            onChangeText={setCurrencyName}
+            placeholder="幣別名稱"
+            placeholderTextColor={palette.mutedText}
+            style={styles.input}
+          />
+          <TextInput
+            value={currencyRate}
+            onChangeText={setCurrencyRate}
+            placeholder="匯率"
+            placeholderTextColor={palette.mutedText}
+            keyboardType="decimal-pad"
+            style={[styles.input, styles.rateFormInput]}
+          />
+          <PrimaryButton
+            label="新增幣別"
+            icon="add-circle-outline"
+            onPress={() => {
+              const rateToBase = Number(currencyRate);
+              if (!currencyCode.trim() || !Number.isFinite(rateToBase) || rateToBase <= 0) {
+                showMessage("請輸入幣別代碼與大於 0 的匯率。");
+                return;
+              }
+              addCurrency({
+                code: currencyCode.trim(),
+                name: currencyName.trim() || currencyCode.trim().toUpperCase(),
+                rateToBase
+              });
+              setCurrencyCode("");
+              setCurrencyName("");
+              setCurrencyRate("");
+            }}
+          />
+        </View>
       </Card>
 
       <Card>
@@ -168,6 +299,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: palette.background
   },
+  smallIconButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.surface
+  },
   avatar: {
     width: 28,
     height: 28,
@@ -195,6 +334,61 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surface,
     outlineStyle: "none"
   } as object,
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  categoryItem: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: palette.background
+  },
+  categoryIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  categoryName: {
+    fontWeight: "800"
+  },
+  swatches: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  swatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent"
+  },
+  selectedSwatch: {
+    borderColor: palette.text
+  },
+  iconChoices: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  iconChoice: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.surfaceAlt
+  },
+  selectedIconChoice: {
+    backgroundColor: palette.primary
+  },
   currencyRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -216,6 +410,20 @@ const styles = StyleSheet.create({
   disabledInput: {
     backgroundColor: palette.surfaceAlt
   },
+  currencyForm: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    alignItems: "center"
+  },
+  codeInput: {
+    flex: 0,
+    width: 150
+  } as object,
+  rateFormInput: {
+    flex: 0,
+    width: 110
+  } as object,
   importBox: {
     minHeight: 140,
     paddingVertical: 12,
@@ -235,3 +443,6 @@ function getSyncStatusLabel(syncStatus: "local" | "syncing" | "synced" | "error"
   }
   return "目前使用本機資料。";
 }
+
+const categoryColors = ["#C9A6A0", "#8E9AAF", "#BCA88D", "#A48E89", "#B87D73", "#8FA89B", "#9AA77D"];
+const categoryIcons = ["receipt", "cart", "cafe", "restaurant", "train", "home", "bag", "heart", "game-controller", "book"];

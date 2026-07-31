@@ -68,6 +68,13 @@ export default function NewTransactionScreen() {
   const title = editingTransaction ? "編輯記帳" : "新增記帳";
 
   useEffect(() => {
+    if (!visibleCategories.length || visibleCategories.some((category) => category.id === form.getValues("categoryId"))) {
+      return;
+    }
+    form.setValue("categoryId", visibleCategories[0].id);
+  }, [form, visibleCategories]);
+
+  useEffect(() => {
     if (!editingTransaction) {
       return;
     }

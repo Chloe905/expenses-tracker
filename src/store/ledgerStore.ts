@@ -17,7 +17,10 @@ type LedgerState = LedgerSnapshot & {
   deleteTransaction: (transactionId: string) => void;
   duplicateTransaction: (transactionId: string) => void;
   addPerson: (name: string) => void;
+  deletePerson: (personId: string) => void;
   addCategory: (category: Omit<Category, "id" | "order">) => void;
+  deleteCategory: (categoryId: string) => void;
+  addCurrency: (currency: Omit<Currency, "isBase">) => void;
   updateCurrencyRate: (code: string, rateToBase: number) => void;
   importSnapshot: (snapshot: LedgerSnapshot) => void;
   exportSnapshot: () => LedgerSnapshot;
@@ -220,6 +223,15 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     set({ people: next.people });
     void persist(next, (syncStatus) => set({ syncStatus }));
   },
+  deletePerson: (personId) => {
+    const state = get();
+    if (personId === "person-me" || state.people.length <= 1) {
+      return;
+    }
+    const next = { ...state, people: state.people.filter((person) => person.id !== personId) };
+    set({ people: next.people });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
   addCategory: (category) => {
     const state = get();
     const nextCategory: Category = {
@@ -229,6 +241,37 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     };
     const next = { ...state, categories: [...state.categories, nextCategory] };
     set({ categories: next.categories });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
+  deleteCategory: (categoryId) => {
+    const state = get();
+    const category = state.categories.find((item) => item.id === categoryId);
+    if (!category) {
+      return;
+    }
+    const sameTypeCategories = state.categories.filter((item) => item.type === category.type);
+    if (sameTypeCategories.length <= 1) {
+      return;
+    }
+    const next = { ...state, categories: state.categories.filter((item) => item.id !== categoryId) };
+    set({ categories: next.categories });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
+  addCurrency: (currency) => {
+    const state = get();
+    const code = currency.code.trim().toUpperCase();
+    if (!code || state.currencies.some((item) => item.code === code)) {
+      return;
+    }
+    const nextCurrency: Currency = {
+      ...currency,
+      code,
+      name: currency.name.trim() || code,
+      rateToBase: currency.rateToBase,
+      isBase: false
+    };
+    const next = { ...state, currencies: [...state.currencies, nextCurrency] };
+    set({ currencies: next.currencies });
     void persist(next, (syncStatus) => set({ syncStatus }));
   },
   updateCurrencyRate: (code, rateToBase) => {
