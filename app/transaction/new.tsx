@@ -170,14 +170,15 @@ export default function NewTransactionScreen() {
         </View>
         {payerIds.map((personId) => {
           const person = people.find((item) => item.id === personId);
+          const autoPaymentAmount = getAutoFilledValue(selectedAmount, payerIds, paymentAmounts, personId);
           return (
             <View key={personId} style={styles.amountRow}>
               <Text style={styles.rowLabel}>{person?.name ?? "未知"} 先付</Text>
               <TextInput
                 keyboardType="decimal-pad"
-                value={paymentAmounts[personId] ?? ""}
+                value={paymentAmounts[personId] ?? autoPaymentAmount}
                 onChangeText={(value) => setPaymentAmounts((current) => ({ ...current, [personId]: value }))}
-                placeholder={payerIds.length === 1 ? String(selectedAmount || "") : "0"}
+                placeholder="0"
                 placeholderTextColor={palette.mutedText}
                 style={styles.rowInput}
               />
@@ -224,6 +225,8 @@ export default function NewTransactionScreen() {
             {splitPersonIds.map((personId, index) => {
               const person = people.find((item) => item.id === personId);
               const equalShare = splitPersonIds.length ? selectedAmount / splitPersonIds.length : 0;
+              const autoSplitAmount = getAutoFilledValue(selectedAmount, splitPersonIds, splitAmounts, personId);
+              const autoSplitPercent = getAutoFilledValue(100, splitPersonIds, splitPercents, personId);
               return (
                 <View key={personId} style={styles.amountRow}>
                   <Text style={styles.rowLabel}>{person?.name ?? "未知"} 應分</Text>
@@ -232,7 +235,7 @@ export default function NewTransactionScreen() {
                   ) : (
                     <TextInput
                       keyboardType="decimal-pad"
-                      value={splitMode === "amount" ? splitAmounts[personId] ?? "" : splitPercents[personId] ?? ""}
+                      value={splitMode === "amount" ? splitAmounts[personId] ?? autoSplitAmount : splitPercents[personId] ?? autoSplitPercent}
                       onChangeText={(value) => {
                         if (splitMode === "amount") {
                           setSplitAmounts((current) => ({ ...current, [personId]: value }));
@@ -410,14 +413,7 @@ function buildTransactionAllocation(input: AllocationInput): {
   splitAllocations: { personId: string; amount?: number; percent?: number }[];
   error?: string;
 } {
-  const payments = input.payerIds.map((personId) => ({
-    personId,
-    amount: parseNumericInput(input.paymentAmounts[personId])
-  }));
-
-  if (payments.length === 1 && payments[0].amount <= 0) {
-    payments[0].amount = input.amount;
-  }
+  const payments = resolveRemainingAllocation(input.amount, input.payerIds, input.paymentAmounts);
 
   const paidTotal = roundInputTotal(payments.reduce((sum, payment) => sum + payment.amount, 0));
   if (Math.abs(paidTotal - input.amount) > 0.01) {
@@ -440,10 +436,7 @@ function buildTransactionAllocation(input: AllocationInput): {
   }
 
   if (input.splitMode === "amount") {
-    const splitAllocations = input.splitPersonIds.map((personId) => ({
-      personId,
-      amount: parseNumericInput(input.splitAmounts[personId])
-    }));
+    const splitAllocations = resolveRemainingAllocation(input.amount, input.splitPersonIds, input.splitAmounts);
     const splitTotal = roundInputTotal(splitAllocations.reduce((sum, split) => sum + (split.amount ?? 0), 0));
     if (Math.abs(splitTotal - input.amount) > 0.01) {
       return {
@@ -455,9 +448,9 @@ function buildTransactionAllocation(input: AllocationInput): {
     return { payments, splitAllocations };
   }
 
-  const splitAllocations = input.splitPersonIds.map((personId) => ({
-    personId,
-    percent: parseNumericInput(input.splitPercents[personId])
+  const splitAllocations = resolveRemainingAllocation(100, input.splitPersonIds, input.splitPercents).map((allocation) => ({
+    personId: allocation.personId,
+    percent: allocation.amount
   }));
   const percentTotal = roundInputTotal(splitAllocations.reduce((sum, split) => sum + (split.percent ?? 0), 0));
   if (Math.abs(percentTotal - 100) > 0.01) {
@@ -473,6 +466,46 @@ function buildTransactionAllocation(input: AllocationInput): {
 function parseNumericInput(value?: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function resolveRemainingAllocation(total: number, personIds: string[], values: Record<string, string>) {
+  const emptyIds = personIds.filter((personId) => isBlank(values[personId]));
+  const enteredTotal = personIds.reduce((sum, personId) => {
+    if (isBlank(values[personId])) {
+      return sum;
+    }
+    return sum + parseNumericInput(values[personId]);
+  }, 0);
+  const autoFillPersonId = emptyIds.length === 1 ? emptyIds[0] : null;
+
+  return personIds.map((personId) => ({
+    personId,
+    amount: personId === autoFillPersonId ? Math.max(roundInputTotal(total - enteredTotal), 0) : parseNumericInput(values[personId])
+  }));
+}
+
+function getAutoFilledValue(total: number, personIds: string[], values: Record<string, string>, personId: string) {
+  if (!isBlank(values[personId])) {
+    return "";
+  }
+
+  const emptyIds = personIds.filter((id) => isBlank(values[id]));
+  if (emptyIds.length !== 1 || emptyIds[0] !== personId || total <= 0) {
+    return "";
+  }
+
+  const enteredTotal = personIds.reduce((sum, id) => {
+    if (id === personId || isBlank(values[id])) {
+      return sum;
+    }
+    return sum + parseNumericInput(values[id]);
+  }, 0);
+  const remaining = Math.max(roundInputTotal(total - enteredTotal), 0);
+  return remaining > 0 ? String(remaining) : "";
+}
+
+function isBlank(value?: string) {
+  return value === undefined || value.trim() === "";
 }
 
 function roundInputTotal(value: number) {
