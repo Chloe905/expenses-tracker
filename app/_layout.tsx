@@ -34,6 +34,12 @@ export default function RootLayout() {
               presentation: "modal"
             }}
           />
+          <Stack.Screen
+            name="invite"
+            options={{
+              title: "加入分帳群組"
+            }}
+          />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -13,6 +13,7 @@ import { palette } from "@/theme/palette";
 
 export default function SettingsScreen() {
   const people = useLedgerStore((state) => state.people);
+  const accountBooks = useLedgerStore((state) => state.accountBooks);
   const categories = useLedgerStore((state) => state.categories);
   const currencies = useLedgerStore((state) => state.currencies);
   const addPerson = useLedgerStore((state) => state.addPerson);
@@ -35,7 +36,9 @@ export default function SettingsScreen() {
   const [currencyRate, setCurrencyRate] = useState("");
   const [importText, setImportText] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [inviteLink, setInviteLink] = useState("");
   const expenseCategories = categories.filter((category) => category.type === "expense");
+  const activeBook = accountBooks[0];
 
   const showMessage = (message: string) => {
     if (Platform.OS === "web") {
@@ -106,6 +109,33 @@ export default function SettingsScreen() {
               setPersonName("");
             }}
           />
+        </View>
+        <View style={styles.inviteBox}>
+          <View style={styles.inviteCopy}>
+            <Text style={styles.inviteTitle}>邀請朋友加入群組</Text>
+            <Text variant="muted">產生連結後，朋友打開即可輸入名字加入這個帳本的分帳人。</Text>
+          </View>
+          <View style={styles.inlineForm}>
+            <TextInput
+              value={inviteLink}
+              editable={false}
+              placeholder="尚未產生邀請連結"
+              placeholderTextColor={palette.mutedText}
+              style={styles.input}
+            />
+            <PrimaryButton
+              label={inviteLink ? "複製" : "產生連結"}
+              icon={inviteLink ? "copy-outline" : "link-outline"}
+              variant="secondary"
+              onPress={() => {
+                if (!inviteLink) {
+                  setInviteLink(buildInviteLink(activeBook?.id ?? "book-personal", activeBook?.name ?? "日常帳本"));
+                  return;
+                }
+                void copyInviteLink(inviteLink, showMessage);
+              }}
+            />
+          </View>
         </View>
       </Card>
 
@@ -382,6 +412,18 @@ const styles = StyleSheet.create({
     gap: 10,
     alignItems: "center"
   },
+  inviteBox: {
+    gap: 10,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: palette.background
+  },
+  inviteCopy: {
+    gap: 4
+  },
+  inviteTitle: {
+    fontWeight: "900"
+  },
   input: {
     flex: 1,
     minHeight: 44,
@@ -517,3 +559,26 @@ type PendingDelete = {
   title: string;
   message: string;
 };
+
+function buildInviteLink(bookId: string, bookName: string) {
+  const params = new URLSearchParams({
+    bookId,
+    bookName
+  });
+
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return `${window.location.origin}/invite?${params.toString()}`;
+  }
+
+  return `morandi-ledger://invite?${params.toString()}`;
+}
+
+async function copyInviteLink(inviteLink: string, showMessage: (message: string) => void) {
+  if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+    await navigator.clipboard.writeText(inviteLink);
+    showMessage("邀請連結已複製。");
+    return;
+  }
+
+  showMessage("已產生邀請連結，可手動複製分享。");
+}
