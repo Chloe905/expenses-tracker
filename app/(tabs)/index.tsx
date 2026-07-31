@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
 import { TransactionRow } from "@/components/TransactionRow";
+import { confirmDeleteTransaction } from "@/lib/confirmDelete";
 import { formatMoney } from "@/lib/money";
 import { getMonthlySummary } from "@/lib/stats";
 import { useLedgerStore } from "@/store/ledgerStore";
@@ -71,12 +72,7 @@ export default function OverviewScreen() {
             payer={people.find((item) => item.id === transaction.payerId)}
             onOpen={() => router.push(`/transaction/${transaction.id}`)}
             onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
-            onDelete={() => {
-              Alert.alert("刪除交易", "確定要刪除這筆交易嗎？", [
-                { text: "取消", style: "cancel" },
-                { text: "刪除", style: "destructive", onPress: () => deleteTransaction(transaction.id) }
-              ]);
-            }}
+            onDelete={() => confirmDeleteTransaction(() => deleteTransaction(transaction.id))}
           />
         )) : <Text variant="muted">今天還沒有交易，點右上角快速新增。</Text>}
       </Card>

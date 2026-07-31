@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Text } from "@/components/Text";
 import { TransactionRow } from "@/components/TransactionRow";
+import { confirmDeleteTransaction } from "@/lib/confirmDelete";
 import { useLedgerStore } from "@/store/ledgerStore";
 import { palette } from "@/theme/palette";
 import { TransactionType } from "@/types/ledger";
@@ -73,12 +74,7 @@ export default function LedgerScreen() {
             payer={people.find((item) => item.id === transaction.payerId)}
             onOpen={() => router.push(`/transaction/${transaction.id}`)}
             onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
-            onDelete={() => {
-              Alert.alert("刪除交易", "確定要刪除這筆交易嗎？", [
-                { text: "取消", style: "cancel" },
-                { text: "刪除", style: "destructive", onPress: () => deleteTransaction(transaction.id) }
-              ]);
-            }}
+            onDelete={() => confirmDeleteTransaction(() => deleteTransaction(transaction.id))}
           />
         ))}
         {!filteredTransactions.length ? <Text variant="muted">沒有符合條件的交易。</Text> : null}

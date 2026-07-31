@@ -20,42 +20,40 @@ export function TransactionRow({ transaction, category, payer, onOpen, onEdit, o
   const sign = transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : "";
 
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="查看交易" onPress={onOpen} style={styles.row}>
-      <View style={[styles.icon, { backgroundColor: category?.color ?? palette.surfaceAlt }]}>
-        <Ionicons name={(category?.icon ?? "receipt") as keyof typeof Ionicons.glyphMap} size={18} color={palette.surface} />
-      </View>
-      <View style={styles.main}>
-        <Text style={styles.name}>{category?.name ?? "未分類"} · {payer?.name ?? "未知"}</Text>
-        <Text variant="muted" numberOfLines={1}>{transaction.note || "沒有備註"}</Text>
-      </View>
-      <View style={styles.amountGroup}>
+    <View style={styles.row}>
+      <Pressable accessibilityRole="button" accessibilityLabel="查看交易" onPress={onOpen} style={styles.rowContent}>
+        <View style={[styles.icon, { backgroundColor: category?.color ?? palette.surfaceAlt }]}>
+          <Ionicons name={(category?.icon ?? "receipt") as keyof typeof Ionicons.glyphMap} size={18} color={palette.surface} />
+        </View>
+        <View style={styles.main}>
+          <Text style={styles.name}>{category?.name ?? "未分類"} · {payer?.name ?? "未知"}</Text>
+          <Text variant="muted" numberOfLines={1}>{transaction.note || "沒有備註"}</Text>
+        </View>
         <Text style={[styles.amount, { color: amountColor }]}>{sign}{formatMoney(transaction.baseAmount)}</Text>
-        <View style={styles.actions}>
+      </Pressable>
+      <View style={styles.actions}>
+        {onEdit ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="編輯交易"
-            onPress={(event) => {
-              event.stopPropagation();
-              onEdit?.();
-            }}
+            onPress={onEdit}
             style={styles.actionButton}
           >
             <Ionicons name="create-outline" size={17} color={palette.mutedText} />
           </Pressable>
+        ) : null}
+        {onDelete ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="刪除交易"
-            onPress={(event) => {
-              event.stopPropagation();
-              onDelete?.();
-            }}
+            onPress={onDelete}
             style={styles.actionButton}
           >
             <Ionicons name="trash-outline" size={17} color={palette.expense} />
           </Pressable>
-        </View>
+        ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -65,6 +63,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingVertical: 10
+  },
+  rowContent: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
   },
   icon: {
     width: 40,
@@ -79,10 +84,6 @@ const styles = StyleSheet.create({
   },
   name: {
     fontWeight: "800"
-  },
-  amountGroup: {
-    alignItems: "flex-end",
-    gap: 4
   },
   amount: {
     fontWeight: "900"

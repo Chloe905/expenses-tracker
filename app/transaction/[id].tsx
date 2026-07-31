@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
+import { confirmDeleteTransaction } from "@/lib/confirmDelete";
 import { formatMoney } from "@/lib/money";
 import { useLedgerStore } from "@/store/ledgerStore";
 import { palette } from "@/theme/palette";
@@ -37,17 +38,10 @@ export default function TransactionDetailScreen() {
   const sign = transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : "";
 
   const handleDelete = () => {
-    Alert.alert("刪除交易", "確定要刪除這筆交易嗎？", [
-      { text: "取消", style: "cancel" },
-      {
-        text: "刪除",
-        style: "destructive",
-        onPress: () => {
-          deleteTransaction(transaction.id);
-          router.back();
-        }
-      }
-    ]);
+    confirmDeleteTransaction(() => {
+      deleteTransaction(transaction.id);
+      router.back();
+    });
   };
 
   return (
