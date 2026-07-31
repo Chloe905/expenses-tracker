@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { Card } from "@/components/Card";
+import { DeleteTransactionModal } from "@/components/DeleteTransactionModal";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
 import { TransactionRow } from "@/components/TransactionRow";
-import { confirmDeleteTransaction } from "@/lib/confirmDelete";
 import { formatMoney } from "@/lib/money";
 import { getMonthlySummary } from "@/lib/stats";
 import { useLedgerStore } from "@/store/ledgerStore";
@@ -14,6 +15,7 @@ import { palette } from "@/theme/palette";
 
 export default function OverviewScreen() {
   const router = useRouter();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const transactions = useLedgerStore((state) => state.transactions);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
@@ -72,10 +74,20 @@ export default function OverviewScreen() {
             payer={people.find((item) => item.id === transaction.payerId)}
             onOpen={() => router.push(`/transaction/${transaction.id}`)}
             onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
-            onDelete={() => confirmDeleteTransaction(() => deleteTransaction(transaction.id))}
+            onDelete={() => setPendingDeleteId(transaction.id)}
           />
         )) : <Text variant="muted">今天還沒有交易，點右上角快速新增。</Text>}
       </Card>
+      <DeleteTransactionModal
+        visible={pendingDeleteId !== null}
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          if (pendingDeleteId) {
+            deleteTransaction(pendingDeleteId);
+          }
+          setPendingDeleteId(null);
+        }}
+      />
     </Screen>
   );
 }

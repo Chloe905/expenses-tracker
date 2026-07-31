@@ -8,7 +8,7 @@ type PrimaryButtonProps = {
   label: string;
   icon?: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "quiet";
+  variant?: "primary" | "secondary" | "quiet" | "danger";
 };
 
 export function PrimaryButton({ label, icon, onPress, variant = "primary" }: PrimaryButtonProps) {
@@ -18,8 +18,8 @@ export function PrimaryButton({ label, icon, onPress, variant = "primary" }: Pri
       onPress={onPress}
       style={({ pressed }) => [styles.button, styles[variant], pressed && styles.pressed]}
     >
-      {icon ? <Ionicons name={icon} size={18} color={variant === "primary" ? palette.surface : palette.text} /> : null}
-      <Text style={[styles.label, variant === "primary" && styles.primaryLabel]}>{label}</Text>
+      {icon ? <Ionicons name={icon} size={18} color={variant === "primary" || variant === "danger" ? palette.surface : palette.text} /> : null}
+      <Text style={[styles.label, (variant === "primary" || variant === "danger") && styles.primaryLabel]}>{label}</Text>
     </Pressable>
   );
 }
@@ -44,6 +44,9 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: palette.border
+  },
+  danger: {
+    backgroundColor: palette.expense
   },
   pressed: {
     opacity: 0.78

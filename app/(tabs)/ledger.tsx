@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
+import { DeleteTransactionModal } from "@/components/DeleteTransactionModal";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Text } from "@/components/Text";
 import { TransactionRow } from "@/components/TransactionRow";
-import { confirmDeleteTransaction } from "@/lib/confirmDelete";
 import { useLedgerStore } from "@/store/ledgerStore";
 import { palette } from "@/theme/palette";
 import { TransactionType } from "@/types/ledger";
@@ -17,6 +17,7 @@ export default function LedgerScreen() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [type, setType] = useState<TransactionType | "all">("all");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const transactions = useLedgerStore((state) => state.transactions);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
@@ -74,11 +75,21 @@ export default function LedgerScreen() {
             payer={people.find((item) => item.id === transaction.payerId)}
             onOpen={() => router.push(`/transaction/${transaction.id}`)}
             onEdit={() => router.push(`/transaction/new?editId=${transaction.id}`)}
-            onDelete={() => confirmDeleteTransaction(() => deleteTransaction(transaction.id))}
+            onDelete={() => setPendingDeleteId(transaction.id)}
           />
         ))}
         {!filteredTransactions.length ? <Text variant="muted">沒有符合條件的交易。</Text> : null}
       </Card>
+      <DeleteTransactionModal
+        visible={pendingDeleteId !== null}
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          if (pendingDeleteId) {
+            deleteTransaction(pendingDeleteId);
+          }
+          setPendingDeleteId(null);
+        }}
+      />
     </Screen>
   );
 }

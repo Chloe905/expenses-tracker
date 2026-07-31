@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { Card } from "@/components/Card";
+import { DeleteTransactionModal } from "@/components/DeleteTransactionModal";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/Text";
-import { confirmDeleteTransaction } from "@/lib/confirmDelete";
 import { formatMoney } from "@/lib/money";
 import { useLedgerStore } from "@/store/ledgerStore";
 import { palette } from "@/theme/palette";
@@ -14,6 +15,7 @@ import { palette } from "@/theme/palette";
 export default function TransactionDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [deleteVisible, setDeleteVisible] = useState(false);
   const transactions = useLedgerStore((state) => state.transactions);
   const categories = useLedgerStore((state) => state.categories);
   const people = useLedgerStore((state) => state.people);
@@ -38,10 +40,9 @@ export default function TransactionDetailScreen() {
   const sign = transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : "";
 
   const handleDelete = () => {
-    confirmDeleteTransaction(() => {
-      deleteTransaction(transaction.id);
-      router.back();
-    });
+    deleteTransaction(transaction.id);
+    setDeleteVisible(false);
+    router.back();
   };
 
   return (
@@ -55,7 +56,7 @@ export default function TransactionDetailScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="編輯交易" onPress={() => router.push(`/transaction/new?editId=${transaction.id}`)} style={styles.iconButton}>
             <Ionicons name="create-outline" size={22} color={palette.text} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="刪除交易" onPress={handleDelete} style={styles.iconButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel="刪除交易" onPress={() => setDeleteVisible(true)} style={styles.iconButton}>
             <Ionicons name="trash-outline" size={22} color={palette.expense} />
           </Pressable>
         </View>
@@ -105,6 +106,11 @@ export default function TransactionDetailScreen() {
         <DetailRow label="備註" value={transaction.note || "沒有備註"} />
         <DetailRow label="標籤" value={transaction.tags.length ? transaction.tags.join(", ") : "沒有標籤"} />
       </Card>
+      <DeleteTransactionModal
+        visible={deleteVisible}
+        onCancel={() => setDeleteVisible(false)}
+        onConfirm={handleDelete}
+      />
     </Screen>
   );
 }
