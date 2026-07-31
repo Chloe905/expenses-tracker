@@ -47,6 +47,14 @@ export type Split = {
   settled: boolean;
 };
 
+export type DebtSettlement = {
+  id: string;
+  fromPersonId: string;
+  toPersonId: string;
+  amount: number;
+  settledAt: string;
+};
+
 export type Transaction = {
   id: string;
   accountBookId: string;
@@ -92,4 +100,5 @@ export type LedgerSnapshot = {
   people: Person[];
   currencies: Currency[];
   transactions: Transaction[];
+  debtSettlements: DebtSettlement[];
 };

@@ -91,4 +91,31 @@ describe("summarizeSettlements", () => {
       { fromPersonId: "ben", toPersonId: "ana", amount: 50 }
     ]);
   });
+
+  it("subtracts recorded debt settlements from current debt", () => {
+    const settlements = summarizeSettlements([
+      {
+        payerId: "me",
+        type: "expense",
+        payments: [{ id: "pay-old", transactionId: "old", personId: "me", amount: 100 }],
+        splits: [
+          { id: "split-old-me", transactionId: "old", personId: "me", amount: 50, settled: false },
+          { id: "split-old-ana", transactionId: "old", personId: "ana", amount: 50, settled: false }
+        ]
+      },
+      {
+        payerId: "me",
+        type: "expense",
+        payments: [{ id: "pay-new", transactionId: "new", personId: "me", amount: 40 }],
+        splits: [
+          { id: "split-new-me", transactionId: "new", personId: "me", amount: 20, settled: false },
+          { id: "split-new-ana", transactionId: "new", personId: "ana", amount: 20, settled: false }
+        ]
+      }
+    ], [
+      { fromPersonId: "ana", toPersonId: "me", amount: 50 }
+    ]);
+
+    expect(settlements).toEqual([{ fromPersonId: "ana", toPersonId: "me", amount: 20 }]);
+  });
 });

@@ -1,5 +1,5 @@
 import { roundMoney } from "@/lib/money";
-import { Payment, Split, SplitMode } from "@/types/ledger";
+import { DebtSettlement, Payment, Split, SplitMode } from "@/types/ledger";
 
 type BuildSplitInput = {
   transactionId: string;
@@ -81,7 +81,10 @@ export function buildSplits({ transactionId, amount, participantIds, mode, alloc
   }));
 }
 
-export function summarizeSettlements(transactions: { payerId: string; baseAmount?: number; type: string; splits: Split[]; payments?: Payment[] }[]) {
+export function summarizeSettlements(
+  transactions: { payerId: string; baseAmount?: number; type: string; splits: Split[]; payments?: Payment[] }[],
+  debtSettlements: Pick<DebtSettlement, "fromPersonId" | "toPersonId" | "amount">[] = []
+) {
   const netByPerson = new Map<string, number>();
 
   for (const transaction of transactions) {
@@ -103,6 +106,11 @@ export function summarizeSettlements(transactions: { payerId: string; baseAmount
       }
       netByPerson.set(split.personId, roundMoney((netByPerson.get(split.personId) ?? 0) - split.amount));
     }
+  }
+
+  for (const settlement of debtSettlements) {
+    netByPerson.set(settlement.fromPersonId, roundMoney((netByPerson.get(settlement.fromPersonId) ?? 0) + settlement.amount));
+    netByPerson.set(settlement.toPersonId, roundMoney((netByPerson.get(settlement.toPersonId) ?? 0) - settlement.amount));
   }
 
   const debtors = Array.from(netByPerson.entries())

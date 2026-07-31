@@ -5,7 +5,7 @@ import { buildSplits } from "@/lib/splits";
 import { toBaseAmount } from "@/lib/money";
 import { loadSnapshot, saveSnapshot } from "@/storage/database";
 import { isFirebaseConfigured, loadCloudSnapshot, saveCloudSnapshot } from "@/storage/firebaseLedger";
-import { Category, Currency, LedgerSnapshot, Person, Transaction, TransactionDraft } from "@/types/ledger";
+import { Category, Currency, DebtSettlement, LedgerSnapshot, Person, Transaction, TransactionDraft } from "@/types/ledger";
 
 type LedgerState = LedgerSnapshot & {
   hydrated: boolean;
@@ -15,6 +15,7 @@ type LedgerState = LedgerSnapshot & {
   addTransaction: (draft: TransactionDraft) => void;
   updateTransaction: (transactionId: string, draft: TransactionDraft) => void;
   deleteTransaction: (transactionId: string) => void;
+  settleDebt: (settlement: Omit<DebtSettlement, "id" | "settledAt">) => void;
   duplicateTransaction: (transactionId: string) => void;
   addPerson: (name: string) => void;
   deletePerson: (personId: string) => void;
@@ -28,7 +29,7 @@ type LedgerState = LedgerSnapshot & {
 };
 
 function seedSnapshot(): LedgerSnapshot {
-  return normalizeSnapshot({ accountBooks, categories, people, currencies, transactions });
+  return normalizeSnapshot({ accountBooks, categories, people, currencies, transactions, debtSettlements: [] });
 }
 
 function snapshotFromState(state: LedgerSnapshot): LedgerSnapshot {
@@ -37,7 +38,8 @@ function snapshotFromState(state: LedgerSnapshot): LedgerSnapshot {
     categories: state.categories,
     people: state.people,
     currencies: state.currencies,
-    transactions: state.transactions
+    transactions: state.transactions,
+    debtSettlements: state.debtSettlements
   };
 }
 
@@ -109,6 +111,7 @@ function buildTransactionFromDraft(
 function normalizeSnapshot(snapshot: LedgerSnapshot): LedgerSnapshot {
   return {
     ...snapshot,
+    debtSettlements: snapshot.debtSettlements ?? [],
     transactions: snapshot.transactions.map((transaction) => ({
       ...transaction,
       payments: transaction.payments?.length
@@ -182,6 +185,21 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       transactions: state.transactions.filter((item) => item.id !== transactionId)
     };
     set({ transactions: next.transactions });
+    void persist(next, (syncStatus) => set({ syncStatus }));
+  },
+  settleDebt: (settlement) => {
+    const state = get();
+    if (settlement.amount <= 0) {
+      return;
+    }
+    const debtSettlement: DebtSettlement = {
+      ...settlement,
+      amount: Math.round((settlement.amount + Number.EPSILON) * 100) / 100,
+      id: createId("debt-settlement"),
+      settledAt: new Date().toISOString()
+    };
+    const next = { ...state, debtSettlements: [debtSettlement, ...state.debtSettlements] };
+    set({ debtSettlements: next.debtSettlements });
     void persist(next, (syncStatus) => set({ syncStatus }));
   },
   duplicateTransaction: (transactionId) => {
@@ -295,11 +313,12 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     void persist(next, (syncStatus) => set({ syncStatus }));
   },
   importSnapshot: (snapshot) => {
-    set({ ...snapshot, hydrated: true });
-    void persist(snapshot, (syncStatus) => set({ syncStatus }));
+    const normalizedSnapshot = normalizeSnapshot(snapshot);
+    set({ ...normalizedSnapshot, hydrated: true });
+    void persist(normalizedSnapshot, (syncStatus) => set({ syncStatus }));
   },
   exportSnapshot: () => {
-    const { accountBooks, categories, people, currencies, transactions } = get();
-    return { accountBooks, categories, people, currencies, transactions };
+    const { accountBooks, categories, people, currencies, transactions, debtSettlements } = get();
+    return { accountBooks, categories, people, currencies, transactions, debtSettlements };
   }
 }));
