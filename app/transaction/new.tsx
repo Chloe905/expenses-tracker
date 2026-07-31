@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { z } from "zod";
 
@@ -61,6 +61,30 @@ export default function NewTransactionScreen() {
   const selectedAmount = Number(form.watch("amount")) || 0;
   const splitMode = form.watch("splitMode");
   const visibleCategories = categories.filter((category) => category.type === selectedType);
+
+  useEffect(() => {
+    if (selectedAmount <= 0 || payerIds.length !== 1) {
+      return;
+    }
+
+    const amount = String(selectedAmount);
+    setPaymentAmounts((current) => current[payerIds[0]] === amount ? current : { ...current, [payerIds[0]]: amount });
+  }, [payerIds, selectedAmount]);
+
+  useEffect(() => {
+    if (splitPersonIds.length !== 1) {
+      return;
+    }
+
+    const personId = splitPersonIds[0];
+    if (splitMode === "amount" && selectedAmount > 0) {
+      const amount = String(selectedAmount);
+      setSplitAmounts((current) => current[personId] === amount ? current : { ...current, [personId]: amount });
+    }
+    if (splitMode === "percent") {
+      setSplitPercents((current) => current[personId] === "100" ? current : { ...current, [personId]: "100" });
+    }
+  }, [selectedAmount, splitMode, splitPersonIds]);
 
   return (
     <Screen>
@@ -176,7 +200,7 @@ export default function NewTransactionScreen() {
               <Text style={styles.rowLabel}>{person?.name ?? "未知"} 先付</Text>
               <TextInput
                 keyboardType="decimal-pad"
-                value={paymentAmounts[personId] ?? autoPaymentAmount}
+                value={getDisplayedInputValue(paymentAmounts[personId], autoPaymentAmount)}
                 onChangeText={(value) => setPaymentAmounts((current) => ({ ...current, [personId]: value }))}
                 placeholder="0"
                 placeholderTextColor={palette.mutedText}
@@ -235,7 +259,7 @@ export default function NewTransactionScreen() {
                   ) : (
                     <TextInput
                       keyboardType="decimal-pad"
-                      value={splitMode === "amount" ? splitAmounts[personId] ?? autoSplitAmount : splitPercents[personId] ?? autoSplitPercent}
+                      value={splitMode === "amount" ? getDisplayedInputValue(splitAmounts[personId], autoSplitAmount) : getDisplayedInputValue(splitPercents[personId], autoSplitPercent)}
                       onChangeText={(value) => {
                         if (splitMode === "amount") {
                           setSplitAmounts((current) => ({ ...current, [personId]: value }));
@@ -502,6 +526,10 @@ function getAutoFilledValue(total: number, personIds: string[], values: Record<s
   }, 0);
   const remaining = Math.max(roundInputTotal(total - enteredTotal), 0);
   return remaining > 0 ? String(remaining) : "";
+}
+
+function getDisplayedInputValue(value: string | undefined, autoValue: string) {
+  return isBlank(value) ? autoValue : value;
 }
 
 function isBlank(value?: string) {
